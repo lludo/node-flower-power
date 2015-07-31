@@ -574,7 +574,7 @@ Upload.prototype.onTxStatusChange = function (data) {
 	if(this.txStatus === this.TxStatusEnum.IDLE) {
 			if (this.historyFile !== null) {
 				this.finishCallback(null, this.historyFile.toString('base64'));
-				return;
+				//return; TODO : issue with BLE cloud bridge
 			}
 			else {
 				this.finishCallback(new Error("Transfer failed", null));
@@ -631,7 +631,7 @@ Upload.prototype.startUpload = function (callback) {
 
 FlowerPower.prototype.getHistory = function (startIdx, callback) {
 	this.writeTxStartIdx(startIdx, function(err) {
-	new Upload(this, callback);	
+	new Upload(this, callback);
     }.bind(this));
 };
 
