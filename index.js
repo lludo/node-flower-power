@@ -1,47 +1,62 @@
+"use strict";
+
 var events = require('events');
 var util = require('util');
 var async = require('async');
-
 var NobleDevice = require('noble-device');
+var noble = require('noble');
+var maxTram = 128;
 
-var LIVE_SERVICE_UUID                       = '39e1fa0084a811e2afba0002a5d5c51b';
 var CALIBRATION_SERVICE_UUID                = '39e1fe0084a811e2afba0002a5d5c51b';
 
-var SUNLIGHT_UUID                           = '39e1fa0184a811e2afba0002a5d5c51b';
-var SOIL_EC_UUID                            = '39e1fa0284a811e2afba0002a5d5c51b';
-var SOIL_TEMPERATURE_UUID                   = '39e1fa0384a811e2afba0002a5d5c51b';
-var AIR_TEMPERATURE_UUID                    = '39e1fa0484a811e2afba0002a5d5c51b';
-var SOIL_MOISTURE_UUID                      = '39e1fa0584a811e2afba0002a5d5c51b';
-var LIVE_MODE_PERIOD_UUID                   = '39e1fa0684a811e2afba0002a5d5c51b';
-var LED_UUID                                = '39e1fa0784a811e2afba0002a5d5c51b';
-var LAST_MOVE_DATE_UUID                     = '39e1fa0884a811e2afba0002a5d5c51b';
-var CALIBRATED_SOIL_MOISTURE_UUID           = '39e1fa0984a811e2afba0002a5d5c51b';
-var CALIBRATED_AIR_TEMPERATURE_UUID         = '39e1fa0a84a811e2afba0002a5d5c51b';
-var CALIBRATED_DLI_UUID                     = '39e1fa0b84a811e2afba0002a5d5c51b';
-var CALIBRATED_EA_UUID                      = '39e1fa0c84a811e2afba0002a5d5c51b';
-var CALIBRATED_ECB_UUID                     = '39e1fa0d84a811e2afba0002a5d5c51b';
-var CALIBRATED_EC_POROUS_UUID               = '39e1fa0e84a811e2afba0002a5d5c51b';
+function flowerPowerUuid(shortUuid) {
+	return '39e1' + shortUuid + '84a811e2afba0002a5d5c51b';
+}
 
-var FRIENDLY_NAME_UUID                      = '39e1fe0384a811e2afba0002a5d5c51b';
-var COLOR_UUID                              = '39e1fe0484a811e2afba0002a5d5c51b';
-var CLOCK_SERVICE_UUID                      = '39e1fd0084a811e2afba0002a5d5c51b';
-var CLOCK_CURRENT_TIME_UUID                 = '39e1fd0184a811e2afba0002a5d5c51b';
+var LIVE_SERVICE_UUID 				= '39e1fa0084a811e2afba0002a5d5c51b';
+var SYSTEM_ID_UUID 				= '2a23';
+var SERIAL_NUMBER_UUID 				= '2a25';
+var FIRMWARE_REVISION_UUID 			= '2a26';
+var HARDWARE_REVISION_UUID 			= '2a27';
+var BATTERY_LEVEL_UUID 				= '2a19';
+var LIVE_MODE_UUID 				= '39e1fa0684a811e2afba0002a5d5c51b';
+var SUNLIGHT_UUID				= '39e1fa0184a811e2afba0002a5d5c51b';
+var TEMPERATURE_UUID 				= '39e1fa0484a811e2afba0002a5d5c51b';
+var SOIL_MOISTURE_UUID 				= '39e1fa0584a811e2afba0002a5d5c51b';
+var FRIENDLY_NAME_UUID 				= '39e1fe0384a811e2afba0002a5d5c51b';
+var COLOR_UUID 					= '39e1fe0484a811e2afba0002a5d5c51b';
+var UPLOAD_SERVICE_UUID 			= '39e1fb0084a811e2afba0002a5d5c51b';
+var UPLOAD_TX_BUFFER_CHAR_UUID 			= '39e1fb0184a811e2afba0002a5d5c51b';
+var UPLOAD_TX_STATUS_CHAR_UUID 			= '39e1fb0284a811e2afba0002a5d5c51b';
+var UPLOAD_RX_STATUS_CHAR_UUID 			= '39e1fb0384a811e2afba0002a5d5c51b';
+var HISTORY_SERVICE_UUID 			= '39e1fc0084a811e2afba0002a5d5c51b';
+var HISTORY_NB_ENTRIES_CHAR_UUID 		= '39e1fc0184a811e2afba0002a5d5c51b';
+var HISTORY_LASTENTRY_IDX_CHAR_UUID 		= '39e1fc0284a811e2afba0002a5d5c51b';
+var HISTORY_TRANSFER_START_IDX_CHAR_UUID 	= '39e1fc0384a811e2afba0002a5d5c51b';
+var HISTORY_CURRENT_SESSION_ID_CHAR_UUID 	= '39e1fc0484a811e2afba0002a5d5c51b';
+var HISTORY_CURRENT_SESSION_START_IDX_CHAR_UUID = '39e1fc0584a811e2afba0002a5d5c51b';
+var HISTORY_CURRENT_SESSION_PERIOD_CHAR_UUID 	= '39e1fc0684a811e2afba0002a5d5c51b';
+var CLOCK_SERVICE_UUID 				= '39e1fd0084a811e2afba0002a5d5c51b';
+var CLOCK_CURRENT_TIME_UUID 			= '39e1fd0184a811e2afba0002a5d5c51b';
 
-var UPLOAD_SERVICE_UUID                     = '39e1fb0084a811e2afba0002a5d5c51b';
-var UPLOAD_TX_BUFFER_UUID                   = '39e1fb0184a811e2afba0002a5d5c51b';
-var UPLOAD_TX_STATUS_UUID                   = '39e1fb0284a811e2afba0002a5d5c51b';
-var UPLOAD_RX_STATUS_UUID                   = '39e1fb0384a811e2afba0002a5d5c51b';
-var HISTORY_SERVICE_UUID                    = '39e1fc0084a811e2afba0002a5d5c51b';
-var HISTORY_NB_ENTRIES_UUID                 = '39e1fc0184a811e2afba0002a5d5c51b';
-var HISTORY_LASTENTRY_IDX_UUID              = '39e1fc0284a811e2afba0002a5d5c51b';
-var HISTORY_TRANSFER_START_IDX_UUID         = '39e1fc0384a811e2afba0002a5d5c51b';
-var HISTORY_CURRENT_SESSION_ID_UUID         = '39e1fc0484a811e2afba0002a5d5c51b';
-var HISTORY_CURRENT_SESSION_START_IDX_UUID  = '39e1fc0584a811e2afba0002a5d5c51b';
-var HISTORY_CURRENT_SESSION_PERIOD_UUID     = '39e1fc0684a811e2afba0002a5d5c51b';
 
-var maxBufferSize = 128;
+var SUNLIGHT_UUID                           	= '39e1fa0184a811e2afba0002a5d5c51b';
+var SOIL_EC_UUID                            	= '39e1fa0284a811e2afba0002a5d5c51b';
+var SOIL_TEMPERATURE_UUID                   	= '39e1fa0384a811e2afba0002a5d5c51b';
+var AIR_TEMPERATURE_UUID                    	= '39e1fa0484a811e2afba0002a5d5c51b';
+var SOIL_MOISTURE_UUID                      	= '39e1fa0584a811e2afba0002a5d5c51b';
+var LIVE_MODE_PERIOD_UUID                   	= '39e1fa0684a811e2afba0002a5d5c51b';
+var LED_UUID                                	= '39e1fa0784a811e2afba0002a5d5c51b';
+var LAST_MOVE_DATE_UUID                     	= '39e1fa0884a811e2afba0002a5d5c51b';
+var CALIBRATED_SOIL_MOISTURE_UUID           	= '39e1fa0984a811e2afba0002a5d5c51b';
+var CALIBRATED_AIR_TEMPERATURE_UUID         	= '39e1fa0a84a811e2afba0002a5d5c51b';
+var CALIBRATED_DLI_UUID                     	= '39e1fa0b84a811e2afba0002a5d5c51b';
+var CALIBRATED_EA_UUID                      	= '39e1fa0c84a811e2afba0002a5d5c51b';
+var CALIBRATED_ECB_UUID                     	= '39e1fa0d84a811e2afba0002a5d5c51b';
+var CALIBRATED_EC_POROUS_UUID               	= '39e1fa0e84a811e2afba0002a5d5c51b';
 
 function FlowerPower(peripheral) {
+
   NobleDevice.call(this, peripheral);
 
   this._peripheral = peripheral;
@@ -49,11 +64,11 @@ function FlowerPower(peripheral) {
   this._characteristics = {};
   this.uuid = peripheral.uuid;
   this.name = peripheral.advertisement.localName;
-  var flags = peripheral.advertisement.manufacturerData.readUInt8(0);
+  /*var flags = peripheral.advertisement.manufacturerData.readUInt8(0);
   this.flags={};
   this.flags.hasEntry = ((flags & (1<<0)) !== 0);
   this.flags.hasMoved = ((flags & (1<<1)) !== 0);
-  this.flags.isStarting = ((flags & (1<<2)) !== 0);
+  this.flags.isStarting = ((flags & (1<<2)) !== 0);*/
   this._peripheral.on('disconnect', this.onDisconnect.bind(this));
 
 }
@@ -435,35 +450,36 @@ FlowerPower.prototype.disableCalibratedLiveMode = function(callback) {
 };
 
 FlowerPower.prototype.getHistoryNbEntries = function(callback) {
-	this.readDataCharacteristic(HISTORY_SERVICE_UUID, HISTORY_NB_ENTRIES_UUID, function (data) {
+
+	this.readDataCharacteristic(HISTORY_SERVICE_UUID, HISTORY_NB_ENTRIES_CHAR_UUID, function (data) {
 		var data = data.readUInt16LE(0);
 		callback(data);
 	}.bind(this));
 };
 
 FlowerPower.prototype.getHistoryLastEntryIdx = function(callback) {
-	this.readDataCharacteristic(HISTORY_SERVICE_UUID,HISTORY_LASTENTRY_IDX_UUID, function (data) {
+	this.readDataCharacteristic(HISTORY_SERVICE_UUID,HISTORY_LASTENTRY_IDX_CHAR_UUID, function (data) {
 		var data = data.readUInt32LE(0);
 		callback(data);
 	}.bind(this));
 };
 
 FlowerPower.prototype.getHistoryCurrentSessionID = function(callback) {
-	this.readDataCharacteristic(HISTORY_SERVICE_UUID, HISTORY_CURRENT_SESSION_ID_UUID, function (data) {
+	this.readDataCharacteristic(HISTORY_SERVICE_UUID, HISTORY_CURRENT_SESSION_ID_CHAR_UUID, function (data) {
 		var data = data.readUInt16LE(0);
 		callback(data);
 	}.bind(this));
 };
 
 FlowerPower.prototype.getHistoryCurrentSessionStartIdx = function(callback) {
-	this.readDataCharacteristic(HISTORY_SERVICE_UUID, HISTORY_CURRENT_SESSION_START_IDX_UUID, function (data) {
+	this.readDataCharacteristic(HISTORY_SERVICE_UUID, HISTORY_CURRENT_SESSION_START_IDX_CHAR_UUID, function (data) {
 		var data = data.readUInt32LE(0);
 		callback(data);
 	}.bind(this));
 };
 
 FlowerPower.prototype.getHistoryCurrentSessionPeriod = function(callback) {
-	this.readDataCharacteristic(HISTORY_SERVICE_UUID, HISTORY_CURRENT_SESSION_PERIOD_UUID, function (data) {
+	this.readDataCharacteristic(HISTORY_SERVICE_UUID, HISTORY_CURRENT_SESSION_PERIOD_CHAR_UUID, function (data) {
 		var data = data.readUInt16LE(0);
 		callback(data);
 	}.bind(this));
@@ -472,27 +488,21 @@ FlowerPower.prototype.getHistoryCurrentSessionPeriod = function(callback) {
 FlowerPower.prototype.writeTxStartIdx = function (startIdx, callback) {
 	var startIdxBuff = new Buffer(4);
 	startIdxBuff.writeUInt32LE(startIdx, 0);
-	this.writeDataCharacteristic(HISTORY_SERVICE_UUID, HISTORY_TRANSFER_START_IDX_UUID, startIdxBuff, callback);
+	this.writeDataCharacteristic(HISTORY_SERVICE_UUID, HISTORY_TRANSFER_START_IDX_CHAR_UUID, startIdxBuff, callback);
 };
 
 FlowerPower.prototype.getStartupTime = function (callback) {
-	this.readDataCharacteristic(CLOCK_SERVICE_UUID, CLOCK_CURRENT_TIME_UUID, function (error, data) {
-		if (error !== null){
-			callback(error, null);
-		} else {
+	this.readDataCharacteristic(CLOCK_SERVICE_UUID, CLOCK_CURRENT_TIME_UUID, function (data) {
 			var startupTime = new Date();
 			startupTime.setTime (startupTime.getTime() - data.readUInt32LE(0)*1000);
-			callback(null, startupTime);
-		}
+			callback(startupTime);
 	});
 };
-
 function UploadBuffer(buffer) {
 	this.idx = buffer.readUInt16LE(0);
 	this.data = new Buffer(buffer.slice(2));
 	return this;
 }
-
 function Upload(fp, callback) {
 	this.fp = fp;
 	this.buffers = [];
@@ -505,7 +515,7 @@ function Upload(fp, callback) {
 	CANCEL: 4,
 	ERROR: 5
 };
-    this.TxStatusEnum = {
+this.TxStatusEnum = {
 	IDLE: 0,
 	TRANSFERING: 1,
 	WAITING_ACK: 2
@@ -524,17 +534,16 @@ function Upload(fp, callback) {
 	return this;
 
 }
-
 Upload.prototype.onWaitingAck = function(callback) {
 	var success = true;
-    var packetSize;
-    if (this.nbTotalBuffers > maxBufferSize) {
-        packetSize = maxBufferSize;
-    }
-    else {
-	    packetSize = this.nbTotalBuffers;
+	var maximum;
+	if (this.nbTotalBuffers > maxTram) {
+	    maximum = maxTram;
 	}
-	for (var idx=this.currentIdx; idx < packetSize; idx++) {
+	else {
+	    maximum = this.nbTotalBuffers;
+	}
+	for (var idx=this.currentIdx; idx < maximum; idx++) {
 		if (idx>0){
 			if (!this.buffers.hasOwnProperty(idx)){
 				success = false;
@@ -543,7 +552,7 @@ Upload.prototype.onWaitingAck = function(callback) {
 		}
 	}
 	if (success === true) {
-        this.historyFile = Buffer.concat( this.buffers.slice(1), this.fileLength);
+		this.historyFile = Buffer.concat( this.buffers.slice(1), this.fileLength);
 	    if (idx < this.nbTotalBuffers) {
 			async.series([
 				this.notifyTxStatus.bind(this),
@@ -551,21 +560,20 @@ Upload.prototype.onWaitingAck = function(callback) {
 				this.writeRxStatus.bind(this, this.RxStatusEnum.ACK)]);
 	    }
 	    else {
-            async.series([
-                this.notifyTxStatus.bind(this),
+			async.series([
+			    this.notifyTxStatus.bind(this),
 				this.notifyTxBuffer.bind(this),
 				this.writeRxStatus.bind(this, this.RxStatusEnum.ACK),
 				this.notifyTxStatus.bind(this),
 				this.notifyTxBuffer.bind(this),
 				this.writeRxStatus.bind(this, this.RxStatusEnum.STANDBY)]);
-		}
+        }
 	}
 	else {
 		this.writeRxStatus(this.RxStatusEnum.NACK, callback);
 	}
 
 };
-
 Upload.prototype.onTxStatusChange = function (data) {
 	this.txStatus = data.readUInt8(0);
 	if(this.txStatus === this.TxStatusEnum.WAITING_ACK) {
@@ -574,54 +582,46 @@ Upload.prototype.onTxStatusChange = function (data) {
 	if(this.txStatus === this.TxStatusEnum.IDLE) {
 			if (this.historyFile !== null) {
 				this.finishCallback(null, this.historyFile.toString('base64'));
-				//return; TODO : issue with BLE cloud bridge
+				//return;
 			}
 			else {
 				this.finishCallback(new Error("Transfer failed", null));
 			}
 	}
 };
-
 Upload.prototype.setFileLength = function (fileLength) {
 	this.fileLength = fileLength;
 	this.nbTotalBuffers = Math.ceil(this.fileLength / this.bufferLength)+1;
 };
-
 Upload.prototype.readFirstBuffer = function (buffer) {
 	this.bufferLength = buffer.length;
 	this.setFileLength(buffer.readUInt32LE(0));
 };
-
 Upload.prototype.onTxBufferReceived = function (data) {
 	var buffer = new UploadBuffer(data);
 	this.buffers[buffer.idx] = buffer.data;
 	if (buffer.idx === 0) {
 		this.readFirstBuffer(buffer.data);
-    }
+}
+console.log("downloaded: " + Math.round(100 * (buffer.idx+1)/this.nbTotalBuffers) + " %" + ' buffer.idx = ' + buffer.idx + ' nbBuffer = ' + this.nbTotalBuffers + ' current idx = ' + this.currentIdx);
 };
-
 Upload.prototype.notifyTxStatus = function (callback) {
-	this.fp.notifyCharacteristic(UPLOAD_SERVICE_UUID, UPLOAD_TX_STATUS_UUID, true, this.onTxStatusChange.bind(this), callback);
+	this.fp.notifyCharacteristic(UPLOAD_SERVICE_UUID, UPLOAD_TX_STATUS_CHAR_UUID, true, this.onTxStatusChange.bind(this), callback);
 };
-
 Upload.prototype.notifyTxBuffer = function (callback) {
-	this.fp.notifyCharacteristic(UPLOAD_SERVICE_UUID, UPLOAD_TX_BUFFER_UUID, true, this.onTxBufferReceived.bind(this), callback);
+	this.fp.notifyCharacteristic(UPLOAD_SERVICE_UUID, UPLOAD_TX_BUFFER_CHAR_UUID, true, this.onTxBufferReceived.bind(this), callback);
 };
-
 Upload.prototype.unnotifyTxStatus = function (callback) {
-	this.fp.notifyCharacteristic(UPLOAD_SERVICE_UUID, UPLOAD_TX_STATUS_UUID, false, this.onTxStatusChange.bind(this), callback);
+	this.fp.notifyCharacteristic(UPLOAD_SERVICE_UUID, UPLOAD_TX_STATUS_CHAR_UUID, false, this.onTxStatusChange.bind(this), callback);
 };
-
 Upload.prototype.unnotifyTxBuffer = function (callback) {
-	this.fp.notifyCharacteristic(UPLOAD_SERVICE_UUID, UPLOAD_TX_BUFFER_UUID, false, this.onTxBufferReceived.bind(this), callback);
+	this.fp.notifyCharacteristic(UPLOAD_SERVICE_UUID, UPLOAD_TX_BUFFER_CHAR_UUID, false, this.onTxBufferReceived.bind(this), callback);
 };
-
 Upload.prototype.writeRxStatus = function (rxStatus, callback) {
 	var rxStatusBuff = new Buffer(1);
 	rxStatusBuff.writeUInt8(rxStatus, 0);
-	this.fp.writeDataCharacteristic(UPLOAD_SERVICE_UUID, UPLOAD_RX_STATUS_UUID, rxStatusBuff, callback);
+	this.fp.writeDataCharacteristic(UPLOAD_SERVICE_UUID, UPLOAD_RX_STATUS_CHAR_UUID, rxStatusBuff, callback);
 };
-
 Upload.prototype.startUpload = function (callback) {
 	async.series([
 		this.notifyTxStatus.bind(this),
@@ -631,8 +631,8 @@ Upload.prototype.startUpload = function (callback) {
 
 FlowerPower.prototype.getHistory = function (startIdx, callback) {
 	this.writeTxStartIdx(startIdx, function(err) {
-	new Upload(this, callback);
-    }.bind(this));
+	new Upload(this, callback);	
+}.bind(this));
 };
 
 FlowerPower.prototype.ledPulse = function(callback) {
@@ -644,3 +644,4 @@ FlowerPower.prototype.ledOff = function(callback) {
 };
 
 module.exports = FlowerPower;
+
