@@ -6,6 +6,7 @@ var NobleDevice = require('noble-device');
 
 var LIVE_SERVICE_UUID                       = '39e1fa0084a811e2afba0002a5d5c51b';
 var CALIBRATION_SERVICE_UUID                = '39e1fe0084a811e2afba0002a5d5c51b';
+var WATERING_SERVICE_UUID                   = '39e1f90084a811e2afba0002a5d5c51b';
 
 var SUNLIGHT_UUID                           = '39e1fa0184a811e2afba0002a5d5c51b';
 var SOIL_EC_UUID                            = '39e1fa0284a811e2afba0002a5d5c51b';
@@ -69,7 +70,7 @@ NobleDevice.Util.mixin(FlowerPower, NobleDevice.DeviceInformationService, [
   'readManufacturerName'
 ]);
 
-FlowerPower.SCAN_UUIDS = [LIVE_SERVICE_UUID];
+FlowerPower.SCAN_UUIDS = [LIVE_SERVICE_UUID, WATERING_SERVICE_UUID];
 
 FlowerPower.prototype.toString = function() {
   return JSON.stringify({
@@ -482,8 +483,8 @@ FlowerPower.prototype.getStartupTime = function (callback) {
       callback(error);
     } else {
       var startupTime = new Date();
-      startupTime.setTime (startupTime.getTime() - data.readUInt32LE(0)*1000);
-      callback(null, startupTime);
+      startupTime.setTime(startupTime.getTime() - data.readUInt32LE(0)*1000);
+      callback(null, startupTime.toISOString());
     }
   });
 };
