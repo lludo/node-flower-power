@@ -33,6 +33,7 @@ var UPLOAD_SERVICE_UUID                     = '39e1fb0084a811e2afba0002a5d5c51b'
 var UPLOAD_TX_BUFFER_UUID                   = '39e1fb0184a811e2afba0002a5d5c51b';
 var UPLOAD_TX_STATUS_UUID                   = '39e1fb0284a811e2afba0002a5d5c51b';
 var UPLOAD_RX_STATUS_UUID                   = '39e1fb0384a811e2afba0002a5d5c51b';
+
 var HISTORY_SERVICE_UUID                    = '39e1fc0084a811e2afba0002a5d5c51b';
 var HISTORY_NB_ENTRIES_UUID                 = '39e1fc0184a811e2afba0002a5d5c51b';
 var HISTORY_LASTENTRY_IDX_UUID              = '39e1fc0284a811e2afba0002a5d5c51b';
@@ -40,6 +41,12 @@ var HISTORY_TRANSFER_START_IDX_UUID         = '39e1fc0384a811e2afba0002a5d5c51b'
 var HISTORY_CURRENT_SESSION_ID_UUID         = '39e1fc0484a811e2afba0002a5d5c51b';
 var HISTORY_CURRENT_SESSION_START_IDX_UUID  = '39e1fc0584a811e2afba0002a5d5c51b';
 var HISTORY_CURRENT_SESSION_PERIOD_UUID     = '39e1fc0684a811e2afba0002a5d5c51b';
+
+var WATER_TANK_LEVEL                        = '39e1f90784a811e2afba0002a5d5c51b';
+
+
+var type = ["Dongle", "Flower Power", "H2O", "Pot"]
+var color = ["Unknown", "Brown", "Esmerald", "Lemon", "Gray brown", "Gray green", "Classic green", "Gray blue"]
 
 function FlowerPower(peripheral) {
   NobleDevice.call(this, peripheral);
@@ -49,11 +56,27 @@ function FlowerPower(peripheral) {
   this._characteristics = {};
   this.uuid = peripheral.uuid;
   this.name = peripheral.advertisement.localName;
-  var flags = peripheral.advertisement.manufacturerData.readUInt8(0);
-  this.flags={};
-  this.flags.hasEntry = ((flags & (1<<0)) !== 0);
-  this.flags.hasMoved = ((flags & (1<<1)) !== 0);
-  this.flags.isStarting = ((flags & (1<<2)) !== 0);
+
+  var manufacturer = peripheral.advertisement.manufacturerData;
+
+  if (manufacturer.length == 5) {
+    this.compagnyIdentifier = manufacturer.readUInt16LE(0);
+    var manufacturerBytes = [];
+    for (var i = 0; i < manufacturer.length; i++) {
+      manufacturerBytes.push(manufacturer.readUInt8(i));
+    }
+
+    this.manufacturerVersion = manufacturerBytes[2];
+    this.color = color[(manufacturerBytes[3] & 0xF0) >> 4];
+    this.type = type[manufacturerBytes[3] & 0x0F];
+
+    this.wateringNeeded = !!(manufacturerBytes[4] & (1 << 2));
+    this.lowBattery = !!(manufacturerBytes[4] & (1 << 3));
+    this.lowWater = !!(manufacturerBytes[4] & (1 << 4));
+    this.starting = !!(manufacturerBytes[4] & (1 << 5));
+    this.available = !!(manufacturerBytes[4] & (1 << 6));
+    this.unreadEntries = !!(manufacturerBytes[4] & (1 << 7));
+  }
 }
 
 NobleDevice.Util.inherits(FlowerPower, NobleDevice);
@@ -92,25 +115,25 @@ FlowerPower.prototype.writeFriendlyName = function(friendlyName, callback) {
 
 FlowerPower.prototype.readData = function(service, uuid, callback) {
   this.readDataCharacteristic(service, uuid, function(error, data) {
-		if (error || !data) callback(error || 'Error: no data');
-		else callback(error, data);
+    if (error || !data) callback(error || 'Error: no data');
+    else callback(error, data);
   }.bind(this));
 };
 
 FlowerPower.prototype.readColor = function(callback) {
-	this.readData(CALIBRATION_SERVICE_UUID, COLOR_UUID, function(error, data) {
-		if (!error) {
-    	var colorCode = data.readUInt16LE(0);
-			var COLOR_CODE_MAPPER = {
-   	  	4: 'brown',
-   	  	6: 'green',
-   	  	7: 'blue'
-   	 	};
-			var color = COLOR_CODE_MAPPER[colorCode] || 'unknown';
-			callback(error, colorCode);
-		}
-		else callback(error);
-	});
+  this.readData(CALIBRATION_SERVICE_UUID, COLOR_UUID, function(error, data) {
+    if (!error) {
+      var colorCode = data.readUInt16LE(0);
+      var COLOR_CODE_MAPPER = {
+        4: 'brown',
+        6: 'green',
+        7: 'blue'
+      };
+      var color = COLOR_CODE_MAPPER[colorCode] || 'unknown';
+      callback(error, colorCode);
+    }
+    else callback(error);
+  });
 };
 
 FlowerPower.prototype.convertSunlightData = function(data) {
@@ -441,53 +464,73 @@ FlowerPower.prototype.disableCalibratedLiveMode = function(callback) {
   }.bind(this));
 };
 
+FlowerPower.prototype.getWaterTankLevel = function(callback) {
+  this.readData(WATERING_SERVICE_UUID, WATER_TANK_LEVEL, function (error, data) {
+    if (error) callback(error);
+    else {
+      var data = data.readUInt8(0);
+      callback(error, data);
+    }
+  });
+};
+
 FlowerPower.prototype.getHistoryNbEntries = function(callback) {
-	this.readData(HISTORY_SERVICE_UUID, HISTORY_NB_ENTRIES_UUID, function (error, data) {
-		if (error) callback(error);
-		else {
-			var data = data.readUInt16LE(0);
-			callback(error, data);
-		}
-	});
+  this.readData(HISTORY_SERVICE_UUID, HISTORY_NB_ENTRIES_UUID, function (error, data) {
+    if (error) callback(error);
+    else {
+      var data = data.readUInt16LE(0);
+      callback(error, data);
+    }
+  });
 };
 
 FlowerPower.prototype.getHistoryLastEntryIdx = function(callback) {
   this.readData(HISTORY_SERVICE_UUID,HISTORY_LASTENTRY_IDX_UUID, function (error, data) {
-		if (error) callback(error);
-		else {
-    	var data = data.readUInt32LE(0);
-    	callback(error, data);
-		}
+    if (error) callback(error);
+    else {
+      var data = data.readUInt32LE(0);
+      callback(error, data);
+    }
   });
 };
 
 FlowerPower.prototype.getHistoryCurrentSessionID = function(callback) {
   this.readData(HISTORY_SERVICE_UUID, HISTORY_CURRENT_SESSION_ID_UUID, function (error, data) {
-		if (error) callback(error);
-		else {
-    	var data = data.readUInt16LE(0);
-    	callback(error, data);
-		}
+    if (error) callback(error);
+    else {
+      var data = data.readUInt16LE(0);
+      callback(error, data);
+    }
   });
 };
 
 FlowerPower.prototype.getHistoryCurrentSessionStartIdx = function(callback) {
   this.readData(HISTORY_SERVICE_UUID, HISTORY_CURRENT_SESSION_START_IDX_UUID, function (error, data) {
-		if (error) callback(error);
-		else {
-    	var data = data.readUInt32LE(0);
-    	callback(error, data);
-		}
+    if (error) callback(error);
+    else {
+      var data = data.readUInt32LE(0);
+      callback(error, data);
+    }
   });
 };
 
 FlowerPower.prototype.getHistoryCurrentSessionPeriod = function(callback) {
   this.readData(HISTORY_SERVICE_UUID, HISTORY_CURRENT_SESSION_PERIOD_UUID, function (error, data) {
-		if (error) callback(error);
-		else {
-    	var data = data.readUInt16LE(0);
-    	callback(error, data);
-		}
+    if (error) callback(error);
+    else {
+      var data = data.readUInt16LE(0);
+      callback(error, data);
+    }
+  });
+};
+
+FlowerPower.prototype.getTxStartIdx = function(callback) {
+  this.readData(HISTORY_SERVICE_UUID, HISTORY_TRANSFER_START_IDX_UUID, function (error, data) {
+    if (error) callback(error);
+    else {
+      var data = data.readUInt32LE(0);
+      callback(error, data);
+    }
   });
 };
 
@@ -570,89 +613,89 @@ Upload.prototype.onWaitingAck = function(callback) {
         async.series([
           this.writeRxStatus.bind(this, this.RxStatusEnum.ACK)
         ]);
-        }
+      }
+    }
+    else {
+      this.writeRxStatus(this.RxStatusEnum.NACK, callback);
+    }
+
+  };
+
+  Upload.prototype.onTxStatusChange = function (data) {
+    this.txStatus = data.readUInt8(0);
+    if(this.txStatus === this.TxStatusEnum.WAITING_ACK) {
+      this.onWaitingAck();
+    }
+    if(this.txStatus === this.TxStatusEnum.IDLE) {
+      if (this.historyFile !== null && typeof this.historyFile !== 'undefined') {
+        this.finishCallback(null, this.historyFile.toString('base64'));
+        return;
       }
       else {
-        this.writeRxStatus(this.RxStatusEnum.NACK, callback);
+        this.finishCallback(new Error("Transfer failed", null));
       }
+    }
+  };
 
+  Upload.prototype.setFileLength = function (fileLength) {
+    this.fileLength = fileLength;
+    this.nbTotalBuffers = Math.ceil(this.fileLength / this.bufferLength)+1;
+  };
+
+  Upload.prototype.readFirstBuffer = function (buffer) {
+    this.bufferLength = buffer.length;
+    this.setFileLength(buffer.readUInt32LE(0));
+  };
+
+  Upload.prototype.onTxBufferReceived = function (data) {
+    var buffer = new UploadBuffer(data);
+    this.buffers[buffer.idx] = buffer.data;
+    if (buffer.idx === 0) {
+      this.readFirstBuffer(buffer.data);
+    }
+  };
+
+  Upload.prototype.notifyTxStatus = function (callback) {
+    this.fp.notifyCharacteristic(UPLOAD_SERVICE_UUID, UPLOAD_TX_STATUS_UUID, true, this.onTxStatusChange.bind(this), callback);
+  };
+
+  Upload.prototype.notifyTxBuffer = function (callback) {
+    this.fp.notifyCharacteristic(UPLOAD_SERVICE_UUID, UPLOAD_TX_BUFFER_UUID, true, this.onTxBufferReceived.bind(this), callback);
+  };
+
+  Upload.prototype.unnotifyTxStatus = function (callback) {
+    this.fp.notifyCharacteristic(UPLOAD_SERVICE_UUID, UPLOAD_TX_STATUS_UUID, false, this.onTxStatusChange.bind(this), callback);
+  };
+
+  Upload.prototype.unnotifyTxBuffer = function (callback) {
+    this.fp.notifyCharacteristic(UPLOAD_SERVICE_UUID, UPLOAD_TX_BUFFER_UUID, false, this.onTxBufferReceived.bind(this), callback);
+  };
+
+  Upload.prototype.writeRxStatus = function (rxStatus, callback) {
+    var rxStatusBuff = new Buffer(1);
+    rxStatusBuff.writeUInt8(rxStatus, 0);
+    this.fp.writeDataCharacteristic(UPLOAD_SERVICE_UUID, UPLOAD_RX_STATUS_UUID, rxStatusBuff, callback);
+  };
+
+  Upload.prototype.startUpload = function (callback) {
+    async.series([
+      this.notifyTxStatus.bind(this),
+      this.notifyTxBuffer.bind(this),
+      this.writeRxStatus.bind(this, this.RxStatusEnum.RECEIVING) ]);
     };
 
-    Upload.prototype.onTxStatusChange = function (data) {
-      this.txStatus = data.readUInt8(0);
-      if(this.txStatus === this.TxStatusEnum.WAITING_ACK) {
-        this.onWaitingAck();
-      }
-      if(this.txStatus === this.TxStatusEnum.IDLE) {
-        if (this.historyFile !== null && typeof this.historyFile !== 'undefined') {
-          this.finishCallback(null, this.historyFile.toString('base64'));
-          return;
-        }
-        else {
-          this.finishCallback(new Error("Transfer failed", null));
-        }
-      }
+    FlowerPower.prototype.getHistory = function (startIdx, callback) {
+      this.writeTxStartIdx(startIdx, function(err) {
+        new Upload(this, callback);
+      }.bind(this));
     };
 
-    Upload.prototype.setFileLength = function (fileLength) {
-      this.fileLength = fileLength;
-      this.nbTotalBuffers = Math.ceil(this.fileLength / this.bufferLength)+1;
+    FlowerPower.prototype.ledPulse = function(callback) {
+      this.writeDataCharacteristic(LIVE_SERVICE_UUID, LED_UUID, new Buffer([0x01]), callback);
     };
 
-    Upload.prototype.readFirstBuffer = function (buffer) {
-      this.bufferLength = buffer.length;
-      this.setFileLength(buffer.readUInt32LE(0));
+    FlowerPower.prototype.ledOff = function(callback) {
+      this.writeDataCharacteristic(LIVE_SERVICE_UUID, LED_UUID, new Buffer([0x00]), callback);
     };
 
-    Upload.prototype.onTxBufferReceived = function (data) {
-      var buffer = new UploadBuffer(data);
-      this.buffers[buffer.idx] = buffer.data;
-      if (buffer.idx === 0) {
-        this.readFirstBuffer(buffer.data);
-      }
-    };
-
-    Upload.prototype.notifyTxStatus = function (callback) {
-      this.fp.notifyCharacteristic(UPLOAD_SERVICE_UUID, UPLOAD_TX_STATUS_UUID, true, this.onTxStatusChange.bind(this), callback);
-    };
-
-    Upload.prototype.notifyTxBuffer = function (callback) {
-      this.fp.notifyCharacteristic(UPLOAD_SERVICE_UUID, UPLOAD_TX_BUFFER_UUID, true, this.onTxBufferReceived.bind(this), callback);
-    };
-
-    Upload.prototype.unnotifyTxStatus = function (callback) {
-      this.fp.notifyCharacteristic(UPLOAD_SERVICE_UUID, UPLOAD_TX_STATUS_UUID, false, this.onTxStatusChange.bind(this), callback);
-    };
-
-    Upload.prototype.unnotifyTxBuffer = function (callback) {
-      this.fp.notifyCharacteristic(UPLOAD_SERVICE_UUID, UPLOAD_TX_BUFFER_UUID, false, this.onTxBufferReceived.bind(this), callback);
-    };
-
-    Upload.prototype.writeRxStatus = function (rxStatus, callback) {
-      var rxStatusBuff = new Buffer(1);
-      rxStatusBuff.writeUInt8(rxStatus, 0);
-      this.fp.writeDataCharacteristic(UPLOAD_SERVICE_UUID, UPLOAD_RX_STATUS_UUID, rxStatusBuff, callback);
-    };
-
-    Upload.prototype.startUpload = function (callback) {
-      async.series([
-        this.notifyTxStatus.bind(this),
-        this.notifyTxBuffer.bind(this),
-        this.writeRxStatus.bind(this, this.RxStatusEnum.RECEIVING) ]);
-      };
-
-      FlowerPower.prototype.getHistory = function (startIdx, callback) {
-        this.writeTxStartIdx(startIdx, function(err) {
-          new Upload(this, callback);
-        }.bind(this));
-      };
-
-      FlowerPower.prototype.ledPulse = function(callback) {
-        this.writeDataCharacteristic(LIVE_SERVICE_UUID, LED_UUID, new Buffer([0x01]), callback);
-      };
-
-      FlowerPower.prototype.ledOff = function(callback) {
-        this.writeDataCharacteristic(LIVE_SERVICE_UUID, LED_UUID, new Buffer([0x00]), callback);
-      };
-
-      module.exports = FlowerPower;
+    module.exports = FlowerPower;
