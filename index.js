@@ -1,6 +1,8 @@
 var events = require('events');
 var util = require('util');
 var async = require('async');
+var services = require('./services');
+var clc = require('cli-color');
 
 var NobleDevice = require('noble-device');
 
@@ -43,10 +45,48 @@ var HISTORY_CURRENT_SESSION_START_IDX_UUID  = '39e1fc0584a811e2afba0002a5d5c51b'
 var HISTORY_CURRENT_SESSION_PERIOD_UUID     = '39e1fc0684a811e2afba0002a5d5c51b';
 
 var WATER_TANK_LEVEL                        = '39e1f90784a811e2afba0002a5d5c51b';
+var WATERING_ALGORITHM_STATUS               = '39e1f91284a811e2afba0002a5d5c51b';
 
+function makeUuid(uuid) {
+	return "39e1" + uuid + "84a811e2afba0002a5d5c51b";
+}
+
+function makeService(service, characName) {
+  for (var i in services[service].characteristic) {
+    if (characName == services[service].characteristic[i]) {
+      var j = (parseInt(i) + 1).toString(16);
+      var uuid = services[service].uuid.substr(0, services[service].uuid.length - j.length) + j;
+      return makeUuid(uuid);
+    }
+  }
+}
 
 var type = ["Dongle", "Flower Power", "H2O", "Pot"]
 var color = ["Unknown", "Brown", "Esmerald", "Lemon", "Gray brown", "Gray green", "Classic green", "Gray blue"]
+
+function bufferToBits(buff) {
+	var str = "";
+	for (var i = 0; i < buff.byteLength; i++) {
+		var bytes = "";
+		for (var j = 7; j >= 0; j--) {
+			bytes += (buff[i] & (1 << j)) ? 1 : 0;
+		}
+		str += bytes;
+	}
+	return str;
+}
+
+function bitsToInt(bits) {
+	var puiss = 1;
+	var nb = 0;
+
+	for (var i = bits.length - 1; i >= 0; i--) {
+		nb += parseInt(bits[i]) * puiss;
+		puiss *= 2;
+	}
+	return nb;
+}
+
 
 function FlowerPower(peripheral) {
   NobleDevice.call(this, peripheral);
@@ -56,26 +96,34 @@ function FlowerPower(peripheral) {
   this._characteristics = {};
   this.uuid = peripheral.uuid;
   this.name = peripheral.advertisement.localName;
-
+	console.log(this.name);
   var manufacturer = peripheral.advertisement.manufacturerData;
 
   if (manufacturer.length == 5) {
-    this.compagnyIdentifier = manufacturer.readUInt16LE(0);
-    var manufacturerBytes = [];
-    for (var i = 0; i < manufacturer.length; i++) {
-      manufacturerBytes.push(manufacturer.readUInt8(i));
+    var manufacturerData = {
+/*b1 b2*/ compagnyIdentifier: 16,
+/*b3*/    manufacturerDataVersion: 8,
+/*b4*/    color: 4,
+/*b4*/    type: 4,
+/*b5*/    unreadEntries: 1,
+/*b5*/    available: 1,
+/*b5*/    starting: 1,
+/*b5*/    lowWater: 1,
+/*b5*/    lowBattery: 1,
+/*b5*/    wateringNeeded: 1
+    };
+
+    var bits = bufferToBits(manufacturer);
+    var currentBits = 0;
+
+    for (var key in manufacturerData) {
+      var data = bitsToInt(bits.slice(currentBits, currentBits + manufacturerData[key]));
+      this[key] = data;
+			currentBits += manufacturerData[key];
     }
+		this.type = type[this.type];
+		this.color = color[this.color];
 
-    this.manufacturerVersion = manufacturerBytes[2];
-    this.color = color[(manufacturerBytes[3] & 0xF0) >> 4];
-    this.type = type[manufacturerBytes[3] & 0x0F];
-
-    this.wateringNeeded = !!(manufacturerBytes[4] & (1 << 2));
-    this.lowBattery = !!(manufacturerBytes[4] & (1 << 3));
-    this.lowWater = !!(manufacturerBytes[4] & (1 << 4));
-    this.starting = !!(manufacturerBytes[4] & (1 << 5));
-    this.available = !!(manufacturerBytes[4] & (1 << 6));
-    this.unreadEntries = !!(manufacturerBytes[4] & (1 << 7));
   }
 }
 
@@ -89,7 +137,7 @@ NobleDevice.Util.mixin(FlowerPower, NobleDevice.DeviceInformationService, [
   'readManufacturerName'
 ]);
 
-FlowerPower.SCAN_UUIDS = [LIVE_SERVICE_UUID, WATERING_SERVICE_UUID];
+FlowerPower.SCAN_UUIDS = [makeUuid(services['live'].uuid), makeUuid(services['watering'].uuid)];
 
 FlowerPower.prototype.toString = function() {
   return JSON.stringify({
@@ -113,10 +161,11 @@ FlowerPower.prototype.writeFriendlyName = function(friendlyName, callback) {
   this.writeDataCharacteristic(CALIBRATION_SERVICE_UUID, FRIENDLY_NAME_UUID, data, callback);
 };
 
-FlowerPower.prototype.readData = function(service, uuid, callback) {
-  this.readDataCharacteristic(service, uuid, function(error, data) {
+FlowerPower.prototype.readData = function(service, uuid, methodeRead, callback) {
+	console.log(clc.yellow(uuid, makeService(service, uuid)));
+  this.readDataCharacteristic(makeUuid(services[service].uuid), makeService(service, uuid), function(error, data) {
     if (error || !data) callback(error || 'Error: no data');
-    else callback(error, data);
+    else callback(error, data[methodeRead](0));
   }.bind(this));
 };
 
@@ -464,74 +513,98 @@ FlowerPower.prototype.disableCalibratedLiveMode = function(callback) {
   }.bind(this));
 };
 
+FlowerPower.prototype.getNextEmptyTankDate = function(callback) {
+	this.readData('plant_doctor', 'next_empty_tank_date', "readUInt32LE", callback);
+};
+
+FlowerPower.prototype.getNextWateringDateTime = function(callback) {
+	this.readData('plant_doctor', 'next_watering_date', "readUInt32LE", callback);
+};
+
+FlowerPower.prototype.getFullTankAutonomy = function(callback) {
+	this.readData('plant_doctor', 'full_tank_autonomy', "readUInt32LE", callback);
+}
+
+FlowerPower.prototype.getStatusFlags = function(callback) {
+  this.readData('plant_doctor', 'status_flags', "readUInt8", function(err, value) {
+		if (err) callback(err);
+		else {
+			var flags = [
+				'Soil dry',
+				'Soil wet',
+				'Tank empty',
+				'Sensor in air'
+			];
+			var buff = new Buffer(1);
+			buff.writeUInt8(value);
+			var bits = bufferToBits(buff);
+			var res = {};
+			for (var i = 7; i >= flags.length; i--) {
+				res[flags[7 - i]] = parseInt(bits.slice(i, i + 1)) ? true : false;
+			}
+			callback(err, res);
+		}
+	});
+};
+
+FlowerPower.prototype.getWateringMode = function(callback) {
+	this.readData('watering', 'watering_mode', "readUInt8", function(err, value) {
+		if (err) callback(err);
+		else {
+			var mode = [
+				'Manual',
+				'Auto',
+				'Vacation'
+			];
+			callback(err, mode[value]);
+		}
+	});
+}
+
 FlowerPower.prototype.getWaterTankLevel = function(callback) {
-  this.readData(WATERING_SERVICE_UUID, WATER_TANK_LEVEL, function (error, data) {
-    if (error) callback(error);
-    else {
-      var data = data.readUInt8(0);
-      callback(error, data);
-    }
-  });
+  this.readData('watering', 'water_tank_level', "readUInt8", callback);
+};
+
+FlowerPower.prototype.getWateringAlgorithmStatus = function(callback) {
+  this.readData('watering', 'watering_algorithm_status', "readUInt8", function(err, value) {
+		if (err) callback(err);
+		else {
+	    var status = [
+	      "Init",
+	      "Happy",
+	      "Watering",
+	      "Error no water",
+	      "Error in air",
+	      "Error vwc still",
+	      "Error internal"
+	    ];
+	    callback(err, status[value]);
+		}
+	});
 };
 
 FlowerPower.prototype.getHistoryNbEntries = function(callback) {
-  this.readData(HISTORY_SERVICE_UUID, HISTORY_NB_ENTRIES_UUID, function (error, data) {
-    if (error) callback(error);
-    else {
-      var data = data.readUInt16LE(0);
-      callback(error, data);
-    }
-  });
+  this.readData('history', 'nb_entries', "readUInt16LE", callback);
 };
 
 FlowerPower.prototype.getHistoryLastEntryIdx = function(callback) {
-  this.readData(HISTORY_SERVICE_UUID,HISTORY_LASTENTRY_IDX_UUID, function (error, data) {
-    if (error) callback(error);
-    else {
-      var data = data.readUInt32LE(0);
-      callback(error, data);
-    }
-  });
+  this.readData('history', 'last_entry_index', "readUInt32LE", callback);
 };
 
 FlowerPower.prototype.getHistoryCurrentSessionID = function(callback) {
-  this.readData(HISTORY_SERVICE_UUID, HISTORY_CURRENT_SESSION_ID_UUID, function (error, data) {
-    if (error) callback(error);
-    else {
-      var data = data.readUInt16LE(0);
-      callback(error, data);
-    }
-  });
+  this.readData('history', 'current_session_id', "readUInt16LE", callback);
 };
 
 FlowerPower.prototype.getHistoryCurrentSessionStartIdx = function(callback) {
-  this.readData(HISTORY_SERVICE_UUID, HISTORY_CURRENT_SESSION_START_IDX_UUID, function (error, data) {
-    if (error) callback(error);
-    else {
-      var data = data.readUInt32LE(0);
-      callback(error, data);
-    }
-  });
+  this.readData('history', 'current_session_start_index', "readUInt32LE", callback);
 };
 
 FlowerPower.prototype.getHistoryCurrentSessionPeriod = function(callback) {
-  this.readData(HISTORY_SERVICE_UUID, HISTORY_CURRENT_SESSION_PERIOD_UUID, function (error, data) {
-    if (error) callback(error);
-    else {
-      var data = data.readUInt16LE(0);
-      callback(error, data);
-    }
-  });
+  this.readData('history', 'current_session_period', "readUInt16LE", callback);
 };
 
 FlowerPower.prototype.getTxStartIdx = function(callback) {
-  this.readData(HISTORY_SERVICE_UUID, HISTORY_TRANSFER_START_IDX_UUID, function (error, data) {
-    if (error) callback(error);
-    else {
-      var data = data.readUInt32LE(0);
-      callback(error, data);
-    }
-  });
+  this.readData('history', 'transfer_start_index', "readUInt32LE", callback);
 };
 
 FlowerPower.prototype.writeTxStartIdx = function (startIdx, callback) {
@@ -541,11 +614,11 @@ FlowerPower.prototype.writeTxStartIdx = function (startIdx, callback) {
 };
 
 FlowerPower.prototype.getStartupTime = function (callback) {
-  this.readDataCharacteristic(CLOCK_SERVICE_UUID, CLOCK_CURRENT_TIME_UUID, function (error, data) {
+  this.readData('clock', 'hawaii_current_time', "readUInt32LE", function (error, data) {
     if (error) callback(error);
     else {
       var startupTime = new Date();
-      startupTime.setTime (startupTime.getTime() - data.readUInt32LE(0)*1000);
+      startupTime.setTime(startupTime.getTime() - data * 1000);
       callback(error, startupTime);
     }
   });
