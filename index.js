@@ -110,8 +110,9 @@ function FlowerPower(peripheral) {
   this._characteristics = {};
   this.uuid = peripheral.uuid;
   this.name = peripheral.advertisement.localName;
-  var manufacturer = peripheral.advertisement.manufacturerData;
+	this.type = "Flower Power";
 
+	var manufacturer = peripheral.advertisement.manufacturerData;
   if (manufacturer.length == 5) {
 		var readBit = function(byte, mask, offset) {
 			return ((parseInt(byte.toString(2), 2) & parseInt(mask, 2)) >> offset);
