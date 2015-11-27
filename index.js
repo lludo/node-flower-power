@@ -76,6 +76,20 @@ function bufferToBits(buff) {
 	return str;
 }
 
+function readBuffer(buff, format) {
+	var byte = format.split('b')[0];
+	var bits = format.split('b')[1];
+
+	var bitL = bits.split('/')[0];
+	var bitH = bits.split('/')[1];
+	bits = bufferToBits(buff);
+
+	var BB = bits.substr(byte * 8, 8);
+	var bb = BB.slice(7 - bitH, 7 - bitL + 1);
+
+	return (bb);
+}
+
 function bitsToInt(bits) {
 	var puiss = 1;
 	var nb = 0;
@@ -96,34 +110,25 @@ function FlowerPower(peripheral) {
   this._characteristics = {};
   this.uuid = peripheral.uuid;
   this.name = peripheral.advertisement.localName;
-	console.log(this.name);
   var manufacturer = peripheral.advertisement.manufacturerData;
 
   if (manufacturer.length == 5) {
-    var manufacturerData = {
-/*b1 b2*/ compagnyIdentifier: 16,
-/*b3*/    manufacturerDataVersion: 8,
-/*b4*/    color: 4,
-/*b4*/    type: 4,
-/*b5*/    unreadEntries: 1,
-/*b5*/    available: 1,
-/*b5*/    starting: 1,
-/*b5*/    lowWater: 1,
-/*b5*/    lowBattery: 1,
-/*b5*/    wateringNeeded: 1
-    };
+		var readBit = function(byte, mask, offset) {
+			return ((parseInt(byte.toString(2), 2) & parseInt(mask, 2)) >> offset);
+		};
 
-    var bits = bufferToBits(manufacturer);
-    var currentBits = 0;
+		this.compagnyIdentifier = manufacturer.readUInt16LE(0);
+		this.dataVersion = manufacturer.readUInt8(2);
 
-    for (var key in manufacturerData) {
-      var data = bitsToInt(bits.slice(currentBits, currentBits + manufacturerData[key]));
-      this[key] = data;
-			currentBits += manufacturerData[key];
-    }
-		this.type = type[this.type];
-		this.color = color[this.color];
+		this.type = type[readBit(manufacturer[3], '00001111', 0)];
+		this.color = color[readBit(manufacturer[3], '11110000', 4)];
 
+		this.unreadEntries = readBit(manufacturer[4], '00000001', 0);
+		this.available = readBit(manufacturer[4], '00000010', 1);
+		this.starting = readBit(manufacturer[4], '00000100', 2);
+		this.lowWater = readBit(manufacturer[4], '00001000', 3);
+		this.lowBattery = readBit(manufacturer[4], '00010000', 4);
+		this.wateringNeeded = readBit(manufacturer[4], '00100000', 5);
   }
 }
 
@@ -142,7 +147,15 @@ FlowerPower.SCAN_UUIDS = [makeUuid(services['live'].uuid), makeUuid(services['wa
 FlowerPower.prototype.toString = function() {
   return JSON.stringify({
     uuid: this.uuid,
-    name: this.name
+    name: this.name,
+		type: this.type,
+		color: this.color,
+		unreadEntries: this.unreadEntries,
+		available: this.available,
+		starting: this.starting,
+		lowWater: this.lowWater,
+		lowBattery: this.lowBattery,
+		wateringNeeded: this.wateringNeeded
   });
 };
 
@@ -345,8 +358,8 @@ FlowerPower.prototype.unnotifySoilMoisture = function(callback) {
   this.notifyCharacteristic(LIVE_SERVICE_UUID, SOIL_MOISTURE_UUID, false, this.onSoilMoistureChange.bind(this), callback);
 };
 
-FlowerPower.prototype.readCalibratedSoilMoisture = function(callback) {
-  this.readFloatLECharacteristic(LIVE_SERVICE_UUID, CALIBRATED_SOIL_MOISTURE_UUID, callback);
+FlowerPower.prototype.getCalibratedSoilMoisture = function(callback) {
+  this.readData('live', 'calibrate_vwc', "readFloatLE", callback);
 };
 
 FlowerPower.prototype.onCalibratedSoilMoistureChange = function(value) {
@@ -513,6 +526,10 @@ FlowerPower.prototype.disableCalibratedLiveMode = function(callback) {
   }.bind(this));
 };
 
+FlowerPower.prototype.getSoilPercentVwc = function (callback) {
+	this.readData('live', 'soil_percent_vwc', "readUInt16LE", callback);
+};
+
 FlowerPower.prototype.getNextEmptyTankDate = function(callback) {
 	this.readData('plant_doctor', 'next_empty_tank_date', "readUInt32LE", callback);
 };
@@ -538,6 +555,8 @@ FlowerPower.prototype.getStatusFlags = function(callback) {
 			var buff = new Buffer(1);
 			buff.writeUInt8(value);
 			var bits = bufferToBits(buff);
+			console.log(bits);
+			// console.log(buff.);
 			var res = {};
 			for (var i = 7; i >= flags.length; i--) {
 				res[flags[7 - i]] = parseInt(bits.slice(i, i + 1)) ? true : false;

@@ -9,9 +9,13 @@ module.exports = {
       'soil_percent_vwc',
       'live_measure_period',
       'led_state',
+      '',
       'calibrate_vwc',
       'calibrate_air_temperature',
       'calibrate_dli',
+      '',
+      '',
+      '',
       'light_red_sensor_value',
       'light_green_sensor_value',
       'light_blue_sensor_value'
@@ -84,6 +88,7 @@ module.exports = {
     uuid: 'fe00',
     characteristic: [
       'calibration_data',
+      '',
       'name',
       'color',
       'tank_capacity',
