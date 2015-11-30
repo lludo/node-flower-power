@@ -2,7 +2,6 @@ var events = require('events');
 var util = require('util');
 var async = require('async');
 var services = require('./services');
-var clc = require('cli-color');
 
 var NobleDevice = require('noble-device');
 
@@ -176,7 +175,6 @@ FlowerPower.prototype.writeFriendlyName = function(friendlyName, callback) {
 };
 
 FlowerPower.prototype.readData = function(service, uuid, methodeRead, callback) {
-	console.log(clc.yellow(uuid, makeService(service, uuid)));
   this.readDataCharacteristic(makeUuid(services[service].uuid), makeService(service, uuid), function(error, data) {
     if (error || !data) callback(error || 'Error: no data');
     else callback(error, data[methodeRead](0));
@@ -555,9 +553,8 @@ FlowerPower.prototype.getStatusFlags = function(callback) {
 			];
 			var buff = new Buffer(1);
 			buff.writeUInt8(value);
+
 			var bits = bufferToBits(buff);
-			console.log(bits);
-			// console.log(buff.);
 			var res = {};
 			for (var i = 7; i >= flags.length; i--) {
 				res[flags[7 - i]] = parseInt(bits.slice(i, i + 1)) ? true : false;
