@@ -60,7 +60,7 @@ function makeService(service, characName) {
   }
 }
 
-var type = ["Dongle", "Flower Power", "H2O", "Pot"]
+var type = ["Dongle", "Flower power", "H2o", "Pot"]
 var color = ["Unknown", "Brown", "Esmerald", "Lemon", "Gray brown", "Gray green", "Classic green", "Gray blue"]
 
 function bufferToBits(buff) {
@@ -109,7 +109,7 @@ function FlowerPower(peripheral) {
   this._characteristics = {};
   this.uuid = peripheral.uuid;
   this.name = peripheral.advertisement.localName;
-  this.type = "Flower Power";
+  this.type = "Flower power";
   this.generation = 1;
 
   var manufacturer = peripheral.advertisement.manufacturerData;
