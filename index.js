@@ -113,7 +113,7 @@ function FlowerPower(peripheral) {
   this.generation = 1;
 
   var manufacturer = peripheral.advertisement.manufacturerData;
-  if (manufacturer.length == 5) {
+  if (manufacturer && manufacturer.length == 5) {
 		var readBit = function(byte, mask, offset) {
 			return ((parseInt(byte.toString(2), 2) & parseInt(mask, 2)) >> offset);
 		};
