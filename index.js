@@ -109,13 +109,15 @@ function FlowerPower(peripheral) {
   this._characteristics = {};
   this.uuid = peripheral.uuid;
   this.name = peripheral.advertisement.localName;
-	this.type = "Flower Power";
+  this.type = "Flower Power";
+  this.generation = 1;
 
-	var manufacturer = peripheral.advertisement.manufacturerData;
+  var manufacturer = peripheral.advertisement.manufacturerData;
   if (manufacturer.length == 5) {
 		var readBit = function(byte, mask, offset) {
 			return ((parseInt(byte.toString(2), 2) & parseInt(mask, 2)) >> offset);
 		};
+		this.generation = 2;
 
 		this.compagnyIdentifier = manufacturer.readUInt16LE(0);
 		this.dataVersion = manufacturer.readUInt8(2);
