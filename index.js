@@ -532,11 +532,24 @@ FlowerPower.prototype.getSoilPercentVwc = function (callback) {
 };
 
 FlowerPower.prototype.getNextEmptyTankDate = function(callback) {
-	this.readData('plant_doctor', 'next_empty_tank_date', "readUInt32LE", callback);
+	this.readData('plant_doctor', 'next_empty_tank_date', "readUInt32LE", function(err, value) {
+		if (err) callback(err);
+		else {
+			var nextEmptyTankDate = new Date();
+			nextEmpynkDate.setTime(nextEmptyTankDate.getTime() - value * 1000);
+			callback(err, nextEmptyTankDate);
+		}
+	});
 };
 
 FlowerPower.prototype.getNextWateringDateTime = function(callback) {
-	this.readData('plant_doctor', 'next_watering_date', "readUInt32LE", callback);
+	this.readData('plant_doctor', 'next_watering_date', "readUInt32LE", function(err, value) {
+		if (err) callback(err);
+		else {
+			var nextWateringDate = new Date();
+			nextWateringDate.setTime(nextWateringDate.getTime() - value * 1000);
+			callback(err, nextWateringDate);
+	});
 };
 
 FlowerPower.prototype.getFullTankAutonomy = function(callback) {
@@ -633,12 +646,12 @@ FlowerPower.prototype.writeTxStartIdx = function (startIdx, callback) {
 };
 
 FlowerPower.prototype.getStartupTime = function (callback) {
-  this.readData('clock', 'hawaii_current_time', "readUInt32LE", function (error, data) {
-    if (error) callback(error);
+  this.readData('clock', 'hawaii_current_time', "readUInt32LE", function (err, value) {
+    if (err) callback(err);
     else {
       var startupTime = new Date();
-      startupTime.setTime(startupTime.getTime() - data * 1000);
-      callback(error, startupTime);
+      startupTime.setTime(startupTime.getTime() - value * 1000);
+      callback(err, startupTime);
     }
   });
 };
