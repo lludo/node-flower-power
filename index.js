@@ -536,7 +536,7 @@ FlowerPower.prototype.getNextEmptyTankDate = function(callback) {
 		if (err) callback(err);
 		else {
 			var nextEmptyTankDate = new Date();
-			nextEmpynkDate.setTime(nextEmptyTankDate.getTime() - value * 1000);
+			nextEmptyTankDate.setTime(nextEmptyTankDate.getTime() - value * 1000);
 			callback(err, nextEmptyTankDate);
 		}
 	});
@@ -549,6 +549,7 @@ FlowerPower.prototype.getNextWateringDateTime = function(callback) {
 			var nextWateringDate = new Date();
 			nextWateringDate.setTime(nextWateringDate.getTime() - value * 1000);
 			callback(err, nextWateringDate);
+		}
 	});
 };
 
