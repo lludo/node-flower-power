@@ -1,3 +1,4 @@
+var bufferEqual = require('buffer-equal');
 var fs = require('fs');
 var async = require('async');
 
@@ -16,14 +17,49 @@ function Update(fp, binaryFile) {
   return this;
 };
 
-Update.prototype.getHeader = function(callback) {
+Update.prototype.extractHeaderFile = function(callback) {
   var buff = new Buffer(8);
 
   fs.read(this.fd, buff, 0, buff.length, 4, function(err, bytesRead, buffHeader) {
-    this.size = buffHeader.readUInt16LE(2);
-    this.fp.writeDataCharacteristic(DOWNLOAD_SERVICE, OAD_IMAGE_NOTIFIY, buffHeader, function(err) {
-      callback(err);
-    }.bind(this));
+    if (err) return callback(err, null);
+    else {
+      this.size = buffHeader.readUInt16LE(2);
+      callback(err, buffHeader);
+    }
+  }.bind(this));
+};
+
+Update.prototype.setImageNotify = function(buffHeader, callback) {
+  this.fp.writeDataCharacteristic(DOWNLOAD_SERVICE, OAD_IMAGE_NOTIFIY, buffHeader, function(err) {
+    callback(err);
+  });
+};
+
+Update.prototype.getImageNotify = function(callback) {
+  this.fp.readDataCharacteristic(DOWNLOAD_SERVICE, OAD_IMAGE_NOTIFIY, function(err, data) {
+    if (err || !data) callback(err || new Error('No data'));
+    else callback(null, data);
+  });
+};
+
+Update.prototype.initUpdate = function(callback) {
+  async.parallel({
+    header: function(callback) {
+      this.extractHeaderFile(callback);
+    }.bind(this),
+    notify: function(callback) {
+      this.getImageNotify(callback);
+    }.bind(this),
+    index: function(callback) {
+      this.getIndex(callback);
+    }.bind(this)
+  }, function(err, res) {
+    // console.log(res);
+    // process.exit(0);
+    if (!bufferEqual(res.header, res.notify) || res.index != 0) {
+      this.setImageNotify(res.header, callback);
+    }
+    else callback(true);
   }.bind(this));
 };
 
@@ -47,7 +83,7 @@ Update.prototype.writeAFrame = function(index, buffer, callback) {
 
   frame.writeUInt16LE(index);
   buffer.copy(frame, 2);
-  // console.log('(' + (index + 1) + '/' + this.size + ' ' + Math.floor(((index + 1) / this.size) * 100) + '%)', frame);
+  console.log('(' + (index + 1) + '/' + this.size + ' ' + Math.floor(((index + 1) / this.size) * 100) + '%)', frame);
   this.fp.writeDataCharacteristic(DOWNLOAD_SERVICE, OAD_IMAGE_BLOCK, frame, function(err) {
     callback(err);
   });
@@ -108,9 +144,10 @@ Update.prototype.startUpdate = function(callback) {
   fs.open(this.file, 'r', function(err, fd) {
     if (err) return callback(err);
     this.fd = fd;
+
     async.series([
       function(callback) {
-        this.getHeader(callback);
+        this.initUpdate(callback);
       }.bind(this),
       function(callback) {
         this.writeFrimware(callback)
@@ -118,6 +155,7 @@ Update.prototype.startUpdate = function(callback) {
     ], function(err) {
       return finishCallback(err);
     }.bind(this));
+
   }.bind(this));
 };
 
