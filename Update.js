@@ -56,10 +56,10 @@ Update.prototype.initUpdate = function(callback) {
   }, function(err, res) {
     // console.log(res);
     // process.exit(0);
-    if (!bufferEqual(res.header, res.notify) || res.index != 0) {
+    if (!bufferEqual(res.header, res.notify)) {
       this.setImageNotify(res.header, callback);
     }
-    else callback(true);
+    else callback("No update firmware required");
   }.bind(this));
 };
 
@@ -132,13 +132,8 @@ Update.prototype.writeFrimware = function(callback) {
 };
 
 Update.prototype.startUpdate = function(callback) {
-  var finishCallback = function(err) {
-    if (this.fd >= 3) fs.closeSync(this.fd);
-    callback(err);
-  }.bind(this);
-
   this.fp._peripheral.on('disconnect', function(err) {
-    return finishCallback(err);
+    return callback(err);
   });
 
   fs.open(this.file, 'r', function(err, fd) {
@@ -153,7 +148,8 @@ Update.prototype.startUpdate = function(callback) {
         this.writeFrimware(callback)
       }.bind(this)
     ], function(err) {
-      return finishCallback(err);
+      if (this.fd >= 3) fs.closeSync(this.fd);
+      callback(err);
     }.bind(this));
 
   }.bind(this));
