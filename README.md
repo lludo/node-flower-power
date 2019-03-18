@@ -10,6 +10,7 @@ Install
 -------
 
 ```sh
+$ npm install @abandonware/bluetooth-hci-socket
 $ npm install flower-power-ble
 ```
 
